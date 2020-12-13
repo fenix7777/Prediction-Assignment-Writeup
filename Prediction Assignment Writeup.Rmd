@@ -1,0 +1,118 @@
+---
+title: "Prediction Assignment Writeup"
+author: "Dmitriy Kairbayev"
+date: "09 12 2020"
+output: html_document
+---
+
+### Libraries and data used in project 
+
+```{r}
+library(lattice)
+library(ggplot2)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(corrplot)
+library(rattle)
+library(randomForest)
+library(RColorBrewer)
+
+url_train <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+url_quiz  <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+data_train <- read.csv("pml-training.csv", strip.white = TRUE, na.strings = c("NA",""))
+data_quiz  <- read.csv("pml-testing.csv",  strip.white = TRUE, na.strings = c("NA",""))
+```
+
+### We need to check massive 
+
+```{r}
+dim(data_train)
+dim(data_quiz)
+```
+
+### We will use setseed equals to 1500 and then we check 75% and 25% percintile.
+
+```{r}
+set.seed(1500)
+
+in_train  <- createDataPartition(data_train$classe, p=0.75, list=FALSE)
+train_set <- data_train[ in_train, ]
+test_set  <- data_train[-in_train, ]
+```
+
+### We need to check massive 
+
+```{r}
+dim(train_set)
+dim(test_set)
+```
+
+## Clearing data
+### It seems that our data have NA and near-zero-variance (NZV)? so we need to delete them from our data.
+
+```{r}
+nzv_var <- nearZeroVar(train_set)
+train_set <- train_set[ , -nzv_var]
+test_set  <- test_set [ , -nzv_var]
+dim(train_set)
+dim(test_set)
+```
+
+### Furthermore, we can see that almost all deleted variables belongs to NA part.
+
+```{r}
+na_var <- sapply(train_set, function(x) mean(is.na(x))) > 0.95
+train_set <- train_set[ , na_var == FALSE]
+test_set  <- test_set [ , na_var == FALSE]
+dim(train_set)
+dim(test_set)
+```
+
+### Bylooking on the data it seems that first 5 column has an identical data? so we can delete it. 
+
+```{r}
+train_set <- train_set[ , -(1:5)]
+test_set  <- test_set [ , -(1:5)]
+dim(train_set)
+dim(test_set)
+```
+
+### As a result, we decrease varibles of the data from 160 to 54.
+
+## Correlation analysis
+### Here we will construct correlation analysis.
+
+```{r}
+corr_matrix <- cor(train_set[ , -54])
+corrplot(corr_matrix, order = "FPC", method = "circle", type = "lower",
+         tl.cex = 0.6, tl.col = rgb(0, 0, 0))
+```
+
+### This graph demonstrates that correlation near the left down corner there is negative strong correlation (here the red color  related to negative relationship), and near the diagonal there is positive strong correlation (the blue color related to positivi relationship).
+
+## Tree model and Random Forest Model
+### here we will construct decision tree model
+
+```{r}
+set.seed(1500)
+fit_decision_tree <- rpart(classe ~ ., data = train_set, method="class")
+fancyRpartPlot(fit_decision_tree)
+```
+
+### Here we will use Random Forest Model
+
+```{r}
+set.seed(1500)
+ctrl_RF <- trainControl(method = "repeatedcv", number = 5, repeats = 2)
+fit_RF  <- train(classe ~ ., data = train_set, method = "rf",
+                 trControl = ctrl_RF, verbose = FALSE)
+fit_RF$finalModel
+```
+
+### And, finally we will use Random Forest Model to make predictions on the 20 variables of the test data
+
+```{r}
+predict_quiz <- predict(fit_RF, newdata = data_quiz)
+predict_quiz
+```
